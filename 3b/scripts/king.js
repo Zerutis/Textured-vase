@@ -3,7 +3,7 @@ $(function () {
     var stats;
     var scene;
     var webGLRenderer;
-    // var axesHelper;
+    var axesHelper;
     var camera1, camera2, camera3;
     var camera1Group, camera2Group, camera3Group;
     var helper;
@@ -13,13 +13,16 @@ $(function () {
 
     // kings params
     var kingFigure;
-    var kingX = 12;
-    var kingY = 12;
+    var kingX = 0;
+    var kingY = 0;
     var lastKey = 0;
-    var speed = 0.1;   
+    var speed = 0.05;   
     var reached = false;
+    var forward = true;
     var dest = kingMove();
-    var forward = false;
+
+    var staticKingX = 0;
+    var staticKingY = 12;
 
     // board params
     var middle = 10.5;
@@ -29,7 +32,8 @@ $(function () {
     // first
     var camPos1 = new THREE.Vector3(10.5,60,-45);
     // second
-    var zoom = -15 / ( 2.0*Math.tan(0.5 * 60 * Math.PI/180) );
+    var dolly = -10;
+    var zoom = dolly / ( 2.0*Math.tan(0.5 * 60 * Math.PI/180) );
 
 
     function init(){
@@ -55,9 +59,16 @@ $(function () {
         scene.add(camera1);
 
         camera2 = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera2.position.set(zoom ,5,12);
-        camera2.lookAt(new THREE.Vector3(21, 5, 12));
+        camera2.position.set(zoom ,3 ,12);
+        camera2.lookAt(new THREE.Vector3(staticKingX, 2.5, staticKingY));
         scene.add(camera2);
+
+        camera3 = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+        camera3.position.set(10.5,30,10.5);
+        if(kingFigure === undefined)
+            camera3.lookAt(new THREE.Vector3(kingX, 5, kingY));
+		camera3.rotation.z = -Math.PI;
+        scene.add(camera3);
 
         // pyramid lines
         helper = new THREE.CameraHelper( camera2, {visible: true});
@@ -77,6 +88,7 @@ $(function () {
         trackballControls = new THREE.TrackballControls( camera1, webGLRenderer.domElement ); 
         
         createBoard(3,8,8);
+        king(12, staticKingX, staticKingY, 0x666666);
         createCamC1();
         createCamC2();
         createCamC3();
@@ -93,14 +105,6 @@ $(function () {
         this.fovC1 = 60;
         this.fovC2 = 60;
 
-        this.OffAnimation = function() {
-            if(this.animateRandom){
-                gui.children[1].hide();
-            }
-        }
-
-        this.OffRandomAnimation = function(){
-        }
 
         this.updateFOV = function(){
             camera1.fov = controls.fovC1;
@@ -117,15 +121,15 @@ $(function () {
         }
         
         this.updateDollyZoom = function(){
-            zoom = -15 / ( 2.0*Math.tan(0.5 * controls.fovC2 * Math.PI/180));
+            zoom = dolly / ( 2.0*Math.tan(0.5 * controls.fovC2 * Math.PI/180));
             camera2.position.x = zoom;
             camera2Group.position.x = zoom; 
         }
     }
 
     var gui = new dat.GUI();
-    //gui.add(controls, 'animate').name('Animacija').onChange(controls.OffRandomAnimation);
-    gui.add(controls, 'animateRandom').name('Atsitiktinė animacija').onChange(controls.OffAnimation);
+    //gui.add(controls, 'animate').name('Animacija');
+    //gui.add(controls, 'animateRandom').name('Atsitiktinė animacija');
     gui.add(controls, 'camera',1,3).name('Kamera').step(1);
     var folderC1 = gui.addFolder('C1-aplankas');
     folderC1.open()
@@ -152,21 +156,24 @@ $(function () {
                 tile.position.x = i*edge;
                 tile.position.z = j*edge;
                 boardObj.add(tile);
+                
                 if(j == width-1) {
                     colorSwitch = !colorSwitch;
                 }
             }
         }
         
-        const geometry = new THREE.BoxGeometry( edge*length*1.1, 0.5 , edge*width*1.1 );
+        const geometry = new THREE.BoxGeometry( edge*length*1.3, 0.5 , edge*width*1.1 );
         const wooden = new THREE.MeshLambertMaterial( {color: 0x46230a} );
         const board = new THREE.Mesh( geometry, wooden );
         board.position.x = edge*length/2-1.5;
         board.position.y = -0.4;
         board.position.z = edge*width/2-1.5;
-        boardObj.add(board);
+        //boardObj.add(board);
 
+        boardObj.receiveShadow = true;
         scene.add(boardObj);
+        scene.add(board);
     }
 
     function king(segments, m_x, m_y, color) {
@@ -194,12 +201,14 @@ $(function () {
 
         var latheGeometry = new THREE.LatheGeometry(points, Math.ceil(segments), 0, 2 * Math.PI);
         var meshMaterial = new THREE.MeshLambertMaterial({color: color, transparent:false, side: THREE.DoubleSide});
-        kingFigure = new THREE.Mesh(latheGeometry, meshMaterial, {castShadow: true});
+        kingFigure = new THREE.Mesh(latheGeometry, meshMaterial);
         kingFigure.position.x = m_x;
         kingFigure.position.y = 5;
         kingFigure.position.z = m_y;
         var axisY = new THREE.Vector3(-1,0,0);
         kingFigure.rotateOnAxis(axisY,Math.PI/2);
+        kingFigure.castShadow = true;
+        kingFigure.receiveShadow = true;
         scene.add(kingFigure);
     }
 
@@ -213,7 +222,7 @@ $(function () {
         var x = kingX;
         var y = kingY;
         var step = 3;
-        if(forward && ifReachable(x+step, y+step)){
+        if(forward){
             if(!ifReachable(x+2*step, y+2*step))
                 forward = !forward;
             return [x+step, y+step];
@@ -323,20 +332,13 @@ $(function () {
         camera2Cylinder3.rotation.x = Math.PI/2;
         camera2Cylinder3.position.set(0, 0, 0);
         
-        camera2Group.position.set(zoom, 5, 12);
-        camera2Group.lookAt(new THREE.Vector3(21,5,12));
+        camera2Group.position.set(zoom, 3, 12);
+        camera2Group.lookAt(new THREE.Vector3(staticKingX, 2.5,staticKingY));
         scene.add(camera2Group);
     }
     
     ////////////////////////////////////////////
     function createCamC3() {
-        camera3 = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
-        camera3.position.set(10.5,30,10.5);
-        if(kingFigure === undefined)
-            camera3.lookAt(new THREE.Vector3(kingX, 5, kingY));
-		camera3.rotation.z = -Math.PI;
-        scene.add(camera3);
-        
         camera3Group = new THREE.Object3D();
         camera3Box = new THREE.Mesh(new THREE.CubeGeometry(1, 2, 4), new THREE.MeshLambertMaterial({color: 0x666666}));
         camera3Group.add(camera3Box);
@@ -382,20 +384,31 @@ $(function () {
         scene.remove(scene.children[scene.children.length-1]);
         king(12, kingX, kingY, 0xdc9456);
     }
+    function updateThirdCamera(){
+        if(kingX >= 0 && kingY >= 0 && kingX <= 21 && kingY <= 21  && dest[0] >= 0 && dest[1] >= 0 && dest[0] <= 21 && dest[1] <= 21){
+            camera3.lookAt(new THREE.Vector3(kingX + epsilon,5,kingY));
+            camera3Group.lookAt(new THREE.Vector3(kingX + epsilon,5,kingY));
+       }
+       else {
+           camera3.lookAt(new THREE.Vector3(kingX,5,kingY));
+           camera3Group.lookAt(new THREE.Vector3(kingX,5,kingY));
+       }
+    }
 
     function render() {
         stats.update();
-
+        
         if (controls.animate){
-            
             if(reached) {
-                dest = kingMoves(lastKey);
+                dest = kingMove(lastKey);
                 reached = false;
             }
+            move();
             if(kingX > dest[0]-0.001 &&  kingX < dest[0]+0.001 && kingY > dest[1]-0.001 &&  kingY < dest[1]+0.001) {
                 reached = true;
                 lastKey = dest[2];
             }
+            updateThirdCamera();
             updateKingPos();
         }
 
@@ -405,27 +418,24 @@ $(function () {
                 reached = false;
             }
             move();
-            if(kingX >= 0 && kingY >= 0 && kingX <= 21 && kingY <= 21  && dest[0] >= 0 && dest[1] >= 0 && dest[0] <= 21 && dest[1] <= 21){
-                 camera3.lookAt(new THREE.Vector3(kingX + epsilon,5,kingY));
-                 camera3Group.lookAt(new THREE.Vector3(kingX + epsilon,5,kingY));
-            }
-            else {
-                camera3.lookAt(new THREE.Vector3(kingX,5,kingY));
-                camera3Group.lookAt(new THREE.Vector3(kingX,5,kingY));
-            }
-            
             if(kingX > dest[0]-0.001 &&  kingX < dest[0]+0.001 && kingY > dest[1]-0.001 &&  kingY < dest[1]+0.001) {
                 reached = true;
                 lastKey = dest[2];
             }
+            updateThirdCamera();
             updateKingPos();
         }
         requestAnimationFrame(render);
-        if(controls.camera == 1)
+        if(controls.camera == 1){
+            controls.animate = true;
             webGLRenderer.render(scene, camera1);
-        else if(controls.camera == 2)
+        } 
+        else if(controls.camera == 2){
+            controls.animate = false;
             webGLRenderer.render(scene, camera2);
+        }
         else if(controls.camera == 3) {
+            controls.animate = true;
             webGLRenderer.render(scene, camera3);
         }
         trackballControls.update();
